@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Harry Potter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Poppins", sans-serif;
+      margin: 0;
+      padding: 1.5rem 1.25rem;
+      background: #1a1a2e;
+      color: #f0e6d3;
+      min-height: 100vh;
+    }
+    .page-layout {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    body.chat-open { overflow: hidden; }
+    .main-panel { min-width: 0; }
+    h1 { font-size: 1.5rem; color: #d4af37; margin: 0 0 1.5rem; }
+    .field { margin-bottom: 0.75rem; }
+    label { display: block; margin-bottom: 0.35rem; font-weight: 600; color: #c9b896; }
+    input, textarea {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid #4a4a6a;
+      border-radius: 6px;
+      background: #16213e;
+      color: #f0e6d3;
+      font-family: inherit;
+      font-size: 0.875rem;
+      outline: none !important;
+    }
+    #question { min-height: 50px; resize: vertical; }
+    .answer-wrap { position: relative; }
+    #answer { background: #0f3460; resize: none; overflow: hidden; line-height: 1.4; max-height: 300px; height: auto;overflow-y: auto; }
+    .loader {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      background: rgba(15, 52, 96, 0.92);
+      border: 1px solid #4a4a6a; border-radius: 6px; color: #d4af37;
+    }
+    .loader[hidden] { display: none; }
+    .spinner {
+      width: 20px; height: 20px;
+      border: 3px solid #4a4a6a; border-top-color: #d4af37;
+      border-radius: 50%; animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button {
+      font-family: inherit; padding: 0.4rem 1rem;
+      background: #740001; color: #fff; border: none; border-radius: 6px;
+      font-size: 0.875rem; cursor: pointer;
+    }
+    button:hover { background: #9a1a1a; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; align-items: inherit; }
+    #clearBtn { background: #4a4a6a; }
+    #helpAssistantBtn {
+      background: linear-gradient(135deg, #1565c0, #0f3460);
+      border: 1px solid #4a7ab8;
+    }
+    #helpAssistantBtn:hover { background: linear-gradient(135deg, #1976d2, #1565c0); }
+    #helpAssistantBtn.active {
+      background: linear-gradient(135deg, #d4af37, #9a7b1a);
+      border-color: #d4af37;
+      color: #1a1a2e;
+    }
+    #helpAssistantBtn.active:hover { background: linear-gradient(135deg, #e6c24a, #b8921f); }
+    #helpAssistantBtn.minimized {
+      background: linear-gradient(135deg, #4a4a6a, #2a2a4a);
+      border: 1px solid #6a6a8a;
+      color: #f0e6d3;
+    }
+    #helpAssistantBtn.minimized:hover { background: linear-gradient(135deg, #5a5a7a, #3a3a5a); }
+    .chat-panel.highlight {
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 2px #d4af37, 0 0 24px rgba(212, 175, 55, 0.3);
+    }
+    .chat-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .btn-voice { background: #1e4d6b; }
+    .btn-voice.recording { background: #8b2942; }
+    .btn-tts { background: #2d6a4f; }
+    .btn-icon { padding: 0.5rem; min-width: 2rem; min-height: 2rem; line-height: 0; }
+    .btn-icon svg { width: 1.125rem; height: 1.125rem; fill: currentColor; }
+    .voice-hint, .error { font-size: 0.75rem; margin-top: 0.35rem; }
+    .voice-hint { color: #8a8a9e; }
+    .error { color: #ff6b6b; }
+    .lang-switcher {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      background: #2a2a4a; border: 1px solid #4a4a6a; border-radius: 999px;
+      padding: 0.25rem 0.5rem; cursor: pointer;
+    }
+    .lang-label { font-size: 0.8rem; font-weight: 600; }
+    .lang-label.active { color: #f0e6d3; }
+    .lang-label.inactive { color: #5a5a7a; }
+    .lang-arrow {
+      width: 1.75rem; height: 1.75rem; border-radius: 50%;
+      background: #1565c0; display: flex; align-items: center; justify-content: center;
+    }
+    .lang-switcher[data-lang="hi"] .lang-arrow { background: #6a1b9a; transform: scaleX(-1); }
+    .lang-arrow svg { width: 0.9rem; height: 0.9rem; fill: #fff; }
+    .lang-spinner {
+      width: 0.85rem; height: 0.85rem;
+      border: 2px solid #4a4a6a; border-top-color: #d4af37;
+      border-radius: 50%; animation: spin 0.75s linear infinite; display: none;
+    }
+    .lang-switcher.translating .lang-spinner { display: block; }
+
+    /* Chat overlay + bottom-right floating panel */
+    .chat-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 900;
+      background: rgba(10, 12, 28, 0.62);
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.28s ease, visibility 0.28s ease;
+    }
+    .chat-overlay.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    .chat-panel {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      z-index: 901;
+      display: flex;
+      flex-direction: column;
+      width: min(380px, calc(100vw - 2rem));
+      height: min(500px, calc(100vh - 2.5rem));
+      background: #16213e;
+      border: 1px solid #4a4a6a;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(212, 175, 55, 0.08);
+      transform: translateY(24px) scale(0.95);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      outline: none !important;
+      box-shadow: none !important;
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease, visibility 0.28s ease, box-shadow 0.3s ease;
+    }
+    .chat-panel.open {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    .chat-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.85rem 1rem;
+      background: linear-gradient(135deg, #0f3460, #1a1a4e);
+      border-bottom: 1px solid #4a4a6a;
+    }
+    .chat-header-text { flex: 1; min-width: 0; }
+    .chat-header-actions {
+      display: flex;
+      gap: 0.35rem;
+      flex-shrink: 0;
+    }
+    .chat-close-btn {
+      flex-shrink: 0;
+      padding: 0.2rem 0.45rem;
+      background: transparent;
+      border: 1px solid #4a4a6a;
+      color: #8a8a9e;
+      font-size: 1rem;
+      line-height: 1;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .chat-close-btn:hover { background: #2a2a4a; color: #f0e6d3; }
+    .chat-header h2 {
+      margin: 0;
+      font-size: 0.95rem;
+      color: #d4af37;
+      font-weight: 600;
+    }
+    .chat-header p {
+      margin: 0.25rem 0 0;
+      font-size: 0.72rem;
+      color: #8a8a9e;
+      line-height: 1.35;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .chat-msg {
+      max-width: 92%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: #740001;
+      color: #fff;
+      border-bottom-right-radius: 3px;
+    }
+    .chat-msg.bot {
+      align-self: flex-start;
+      background: #0f3460;
+      color: #f0e6d3;
+      border-bottom-left-radius: 3px;
+    }
+    .chat-msg .source-tag {
+      display: inline-block;
+      margin-top: 0.35rem;
+      font-size: 0.65rem;
+      color: #8a8a9e;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .chat-typing {
+      margin: 0 0.75rem 0.5rem;
+      padding: 0.55rem 0.85rem;
+      background: #0f3460;
+      border-radius: 10px;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      align-self: flex-start;
+      width: fit-content;
+    }
+    .chat-typing[hidden] { display: none; }
+    .chat-typing span {
+      width: 6px; height: 6px;
+      background: #d4af37;
+      border-radius: 50%;
+      animation: bounce 1.2s infinite ease-in-out;
+    }
+    .chat-typing span:nth-child(2) { animation-delay: 0.15s; }
+    .chat-typing span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-5px); opacity: 1; }
+    }
+    .chat-suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      padding: 0 0.75rem 0.5rem;
+    }
+    .chat-suggestions button {
+      font-size: 0.68rem;
+      padding: 0.3rem 0.55rem;
+      background: #2a2a4a;
+      border: 1px solid #4a4a6a;
+      color: #c9b896;
+    }
+    .chat-suggestions button:hover { background: #3a3a5a; }
+    .chat-input-row {
+      display: flex;
+      gap: 0.4rem;
+      padding: 0.65rem 0.75rem;
+      border-top: 1px solid #4a4a6a;
+      background: #1a1a2e;
+    }
+    .chat-input-row textarea {
+      flex: 1;
+      min-height: 38px;
+      max-height: 90px;
+      resize: none;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.8rem;
+    }
+    .chat-input-row button {
+      align-self: flex-end;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 480px) {
+      .chat-panel {
+        bottom: 0;
+        right: 0;
+        width: 100%;
+        height: min(85vh, 660px);
+        border-radius: 14px 14px 0 0;
+        transform: translateY(100%);
+      }
+      .chat-panel.open {
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="pageLayout" class="page-layout">
+    <main class="main-panel">
+      <h1>Harry Potter</h1>
+
+      <div class="field">
+        <label for="question">Your question</label>
+        <textarea id="question" placeholder="e.g. Who is Hermione?"></textarea>
+        <div class="actions">
+          <button type="button" id="micBtn" class="btn-voice btn-icon" title="Speak question">
+            <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2zM11 18.92V22h2v-3.08A7.001 7.001 0 0 0 19 13h-2a5 5 0 0 1-10 0H5a7.001 7.001 0 0 0 6 5.92z"/></svg>
+          </button>
+          <button type="button" id="askBtn">Ask</button>
+          <button type="button" id="clearBtn">Clear</button>
+          <button type="button" id="helpAssistantBtn" aria-expanded="false" aria-controls="chatPanel">Help with Assistant</button>
+          <a href="/agent" target="_blank" style="font-size:0.75rem;color:#8ab4f8;text-decoration:none;padding:0.4rem 0">Agent desk</a>
+        </div>
+        <p id="voiceHint" class="voice-hint" hidden></p>
+      </div>
+      <p id="error" class="error" hidden></p>
+
+      <div class="field">
+        <label for="answer">Answer</label>
+        <div class="answer-wrap">
+          <textarea id="answer" readonly rows="1" placeholder="Answer will appear here"></textarea>
+          <div id="loader" class="loader" hidden><span class="spinner"></span> Loading...</div>
+        </div>
+        <div class="actions">
+          <button type="button" id="readAloudBtn" class="btn-tts">Read aloud</button>
+          <button type="button" id="stopSpeechBtn" class="btn-voice" disabled>Stop</button>
+          <div id="langSwitcher" class="lang-switcher" data-lang="en" role="button" tabindex="0">
+            <span class="lang-label active" id="labelEn">English</span>
+            <div class="lang-arrow"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
+            <span class="lang-label inactive" id="labelHi">Hindi</span>
+            <span class="lang-spinner"></span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="chatOverlay" class="chat-overlay" aria-hidden="true"></div>
+  <aside id="chatPanel" class="chat-panel" aria-label="Help assistant" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="chat-header">
+      <div class="chat-header-text">
+        <h2>Help Assistant</h2>
+        <p id="chatSubtitle">Ask anything — AI answers when no agent is online.</p>
+      </div>
+      <div class="chat-header-actions">
+        <button type="button" id="chatMinimizeBtn" class="chat-close-btn" title="Minimize" aria-label="Minimize assistant">&#8211;</button>
+        <button type="button" id="chatCloseBtn" class="chat-close-btn" title="Close assistant" aria-label="Close assistant">&times;</button>
+      </div>
+    </div>
+    <div class="chat-body">
+      <div id="chatMessages" class="chat-messages"></div>
+      <div id="chatTyping" class="chat-typing" hidden>
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <textarea id="chatInput" rows="1" placeholder="Type a question…"></textarea>
+      <button type="button" id="chatSendBtn">Send</button>
+    </div>
+  </aside>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const questionEl = $("question"), answerEl = $("answer"), askBtn = $("askBtn");
+    const clearBtn = $("clearBtn"), helpAssistantBtn = $("helpAssistantBtn"), micBtn = $("micBtn"), readAloudBtn = $("readAloudBtn");
+    const stopSpeechBtn = $("stopSpeechBtn"), voiceHintEl = $("voiceHint");
+    const loaderEl = $("loader"), errorEl = $("error"), langSwitcher = $("langSwitcher");
+    const labelEn = $("labelEn"), labelHi = $("labelHi");
+    const chatMessages = $("chatMessages"), chatInput = $("chatInput");
+    const chatSendBtn = $("chatSendBtn"), chatTyping = $("chatTyping");
+    const chatPanel = $("chatPanel");
+    const chatOverlay = $("chatOverlay"), chatCloseBtn = $("chatCloseBtn"), chatMinimizeBtn = $("chatMinimizeBtn");
+    const chatSubtitle = $("chatSubtitle");
+
+    let currentLang = "en", translateToHindi = false, recognition = null, isListening = false;
+    let chatBusy = false;
+    let chatMinimized = false;
+    let chatMode = "ai";
+    let helpSessionId = null; // never persist live session across page loads
+    let liveMsgAfter = 0;
+    let livePollTimer = null;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function showError(msg) {
+      errorEl.textContent = msg || "";
+      errorEl.hidden = !msg;
+    }
+
+    function setLangUI(lang) {
+      currentLang = lang;
+      translateToHindi = lang === "hi";
+      langSwitcher.dataset.lang = lang;
+      labelEn.className = "lang-label " + (lang === "en" ? "active" : "inactive");
+      labelHi.className = "lang-label " + (lang === "hi" ? "active" : "inactive");
+    }
+
+    function setAnswer(text) {
+      answerEl.value = text;
+      answerEl.style.height = "auto";
+      answerEl.style.height = answerEl.scrollHeight + "px";
+    }
+
+    function setLoading(on) {
+      loaderEl.hidden = !on;
+      askBtn.disabled = on;
+    }
+
+    function appendChatMessage(text, role, source, isWelcome) {
+      const div = document.createElement("div");
+      div.className = "chat-msg " + role;
+      if (isWelcome) div.dataset.welcome = "1";
+      div.textContent = text;
+      if (role === "bot" && source) {
+        const tag = document.createElement("span");
+        tag.className = "source-tag";
+        tag.textContent = source;
+        div.appendChild(document.createElement("br"));
+        div.appendChild(tag);
+      }
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return div;
+    }
+
+    function setChatBusy(on) {
+      chatBusy = on;
+      chatSendBtn.disabled = on;
+      chatTyping.hidden = !on;
+      if (on) chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function updateWelcomeBubbleToOffline() {
+      const welcome = chatMessages.querySelector(".chat-msg.bot[data-welcome]");
+      if (!welcome) return;
+      const tag = welcome.querySelector(".source-tag");
+      // Only update if it still shows the "online" message
+      if (tag && tag.textContent.toLowerCase() === "live") {
+        welcome.childNodes[0].textContent = "No agent is online right now — AI will answer your questions.";
+        tag.textContent = "ai";
+      }
+    }
+
+    async function announceChatModeOnce() {
+      try {
+        const res = await fetch("/agent/status");
+        const data = await res.json();
+        if (data.online) {
+          chatSubtitle.textContent = "An agent is online — you can chat live.";
+          appendChatMessage("An agent is online — you can chat live.", "bot", "live", true);
+        } else {
+          chatSubtitle.textContent = "Ask anything — AI will answer your questions.";
+          appendChatMessage("No agent is online right now — AI will answer your questions.", "bot", "ai", true);
+        }
+      } catch (_) {
+        chatSubtitle.textContent = "Ask anything — AI will answer your questions.";
+        appendChatMessage("No agent is online right now — AI will answer your questions.", "bot", "ai", true);
+      }
+    }
+
+    async function refreshAgentStatus() {
+      try {
+        const res = await fetch("/agent/status");
+        const data = await res.json();
+        if (data.online) {
+          chatSubtitle.textContent = "An agent is online — you can chat live.";
+        } else {
+          chatSubtitle.textContent = "Ask anything — AI will answer your questions.";
+          if (chatMode === "live") {
+            chatMode = "ai";
+            helpSessionId = null;
+            stopLivePoll();
+          }
+        }
+        return data.online;
+      } catch (_) {
+        chatSubtitle.textContent = "Ask anything — AI will answer your questions.";
+        return false;
+      }
+    }
+
+    function startLivePoll() {
+      stopLivePoll();
+      livePollTimer = setInterval(async () => {
+        if (!helpSessionId || chatMode !== "live") return;
+        try {
+          const res = await fetch(
+            "/help/chat/poll?session_id=" + encodeURIComponent(helpSessionId) + "&after=" + liveMsgAfter
+          );
+          const data = await res.json();
+          if (!res.ok) return;
+          liveMsgAfter = data.total ?? liveMsgAfter;
+          (data.messages || []).forEach((m) => {
+            // Only show messages from the agent side, not echoes of visitor messages
+            if (m.role === "agent" || m.role === "system") {
+              appendChatMessage(m.text, "bot", m.role === "agent" ? "agent" : "");
+            }
+          });
+        } catch (_) {}
+      }, 2000);
+    }
+
+    function stopLivePoll() {
+      if (livePollTimer) clearInterval(livePollTimer);
+      livePollTimer = null;
+    }
+
+    async function sendChatMessage(question) {
+      const q = (question || "").trim();
+      if (!q || chatBusy) return;
+      chatInput.value = "";
+      const userBubble = appendChatMessage(q, "user");
+      setChatBusy(true);
+
+      try {
+        const res = await fetch("/help/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // only pass session_id when we know we're in live mode
+          body: JSON.stringify({
+            question: q,
+            session_id: chatMode === "live" ? helpSessionId : null,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+
+        if (data.mode === "live") {
+          // Backend confirmed agent is online — message delivered
+          chatMode = "live";
+          helpSessionId = data.session_id;
+          liveMsgAfter = data.message_count ?? liveMsgAfter + 1;
+          chatSubtitle.textContent = "An agent is online — you can chat live.";
+          setChatBusy(false);
+          startLivePoll();
+        } else {
+          // Backend confirmed agent is offline — show AI answer
+          chatMode = "ai";
+          helpSessionId = null;
+          stopLivePoll();
+          chatSubtitle.textContent = "Ask anything — AI will answer your questions.";
+          // If the welcome message still says "online", update it to reflect reality
+          updateWelcomeBubbleToOffline();
+          // Harry Potter questions are out of scope for this assistant:
+          // remove the question bubble and show no reply at all.
+          if (data.source === "off_topic") {
+            userBubble.remove();
+          } else {
+            appendChatMessage(data.answer || "No answer available.", "bot", data.source || "ai");
+          }
+          setChatBusy(false);
+        }
+      } catch (e) {
+        appendChatMessage("Sorry, something went wrong. " + e.message, "bot");
+        setChatBusy(false);
+      } finally {
+        chatInput.focus();
+      }
+    }
+
+    chatSendBtn.addEventListener("click", () => sendChatMessage(chatInput.value));
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage(chatInput.value);
+      }
+    });
+
+    function openChatPanel() {
+      chatMinimized = false;
+      chatOverlay.classList.add("open");
+      chatOverlay.setAttribute("aria-hidden", "false");
+      chatPanel.classList.add("open");
+      chatPanel.setAttribute("aria-hidden", "false");
+      document.body.classList.add("chat-open");
+      helpAssistantBtn.classList.add("active");
+      helpAssistantBtn.classList.remove("minimized");
+      helpAssistantBtn.setAttribute("aria-expanded", "true");
+      // Show welcome message only when chat is empty (fresh open)
+      if (chatMessages.children.length === 0) {
+        announceChatModeOnce();
+      } else {
+        // Silently update subtitle and mode on re-open
+        refreshAgentStatus();
+      }
+      if (chatMode === "live" && helpSessionId) startLivePoll();
+    }
+
+    function minimizeChatPanel() {
+      if (!chatPanel.classList.contains("open")) return;
+      chatMinimized = true;
+      chatOverlay.classList.remove("open");
+      chatOverlay.setAttribute("aria-hidden", "true");
+      chatPanel.classList.remove("open", "highlight");
+      chatPanel.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("chat-open");
+      helpAssistantBtn.classList.remove("active");
+      helpAssistantBtn.classList.add("minimized");
+      helpAssistantBtn.setAttribute("aria-expanded", "false");
+    }
+
+    function closeChatPanel() {
+      chatMinimized = false;
+      stopLivePoll();
+      chatMode = "ai";
+      helpSessionId = null;
+      liveMsgAfter = 0;
+      chatMessages.innerHTML = ""; // clear messages so next open shows fresh status
+      chatOverlay.classList.remove("open");
+      chatOverlay.setAttribute("aria-hidden", "true");
+      chatPanel.classList.remove("open", "highlight");
+      chatPanel.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("chat-open");
+      helpAssistantBtn.classList.remove("active", "minimized");
+      helpAssistantBtn.setAttribute("aria-expanded", "false");
+    }
+
+    function focusChatPanel() {
+      openChatPanel();
+      chatPanel.classList.add("highlight");
+      setTimeout(() => chatPanel.classList.remove("highlight"), 1200);
+    }
+
+    helpAssistantBtn.addEventListener("click", () => {
+      const question = questionEl.value.trim();
+
+      if (!question) {
+        if (chatPanel.classList.contains("open")) {
+          minimizeChatPanel();
+          return;
+        }
+        if (chatMinimized) {
+          openChatPanel();
+          chatInput.focus();
+          return;
+        }
+        openChatPanel();
+        chatInput.focus();
+        return;
+      }
+
+      focusChatPanel();
+      sendChatMessage(question);
+    });
+
+    chatCloseBtn.addEventListener("click", closeChatPanel);
+    chatMinimizeBtn.addEventListener("click", minimizeChatPanel);
+
+    async function translateAnswer(text) {
+      if (!text?.trim()) return;
+      langSwitcher.classList.add("translating");
+      showError("");
+      try {
+        const res = await fetch("/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text.trim(), target: "Hindi" }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Translation failed");
+        if (!answerEl.dataset.original) answerEl.dataset.original = text.trim();
+        setAnswer(data.translated);
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        langSwitcher.classList.remove("translating");
+      }
+    }
+
+    function updateSpeechButtons() {
+      stopSpeechBtn.disabled = !(window.speechSynthesis?.speaking);
+    }
+
+    function speakText(text) {
+      if (!window.speechSynthesis) return showError("Text-to-speech not supported.");
+      const t = (text || "").trim();
+      if (!t) return showError("Ask a question first.");
+      showError("");
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(t);
+      u.lang = "en-US";
+      u.onend = u.onerror = updateSpeechButtons;
+      window.speechSynthesis.speak(u);
+      updateSpeechButtons();
+    }
+
+    function initRecognition() {
+      if (!SpeechRecognition) return null;
+      const rec = new SpeechRecognition();
+      rec.lang = "en-US";
+      rec.continuous = false;
+      rec.onstart = () => { isListening = true; micBtn.classList.add("recording"); };
+      rec.onend = () => { isListening = false; micBtn.classList.remove("recording"); voiceHintEl.hidden = true; };
+      rec.onerror = (ev) => {
+        if (ev.error !== "aborted" && ev.error !== "no-speech") {
+          voiceHintEl.textContent = ev.error === "not-allowed" ? "Microphone permission denied." : "Speech error.";
+          voiceHintEl.hidden = false;
+        }
+      };
+      rec.onresult = (ev) => {
+        const said = ev.results[0]?.[0]?.transcript;
+        if (said) questionEl.value = (questionEl.value.trim() + " " + said).trim();
+      };
+      return rec;
+    }
+
+    if (!SpeechRecognition) {
+      micBtn.disabled = true;
+      voiceHintEl.textContent = "Voice input needs Chrome or Edge.";
+      voiceHintEl.hidden = false;
+    }
+
+    micBtn.addEventListener("click", () => {
+      if (!SpeechRecognition) return;
+      if (isListening && recognition) { recognition.stop(); return; }
+      showError("");
+      recognition = initRecognition();
+      try { recognition?.start(); } catch (_) {}
+    });
+
+    readAloudBtn.addEventListener("click", () => speakText(answerEl.value));
+    stopSpeechBtn.addEventListener("click", () => { window.speechSynthesis?.cancel(); updateSpeechButtons(); });
+    if (window.speechSynthesis) setInterval(updateSpeechButtons, 400);
+
+    async function callAskApi() {
+      const question = questionEl.value.trim();
+      if (!question) return showError("Please type a question.");
+      showError("");
+      setLoading(true);
+      setAnswer("");
+      delete answerEl.dataset.original;
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+        setAnswer(data.answer || "");
+        if (translateToHindi && data.answer) await translateAnswer(data.answer);
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function clearAll() {
+      setLoading(false);
+      window.speechSynthesis?.cancel();
+      if (recognition && isListening) try { recognition.abort(); } catch (_) {}
+      questionEl.value = "";
+      setAnswer("");
+      delete answerEl.dataset.original;
+      setLangUI("en");
+      showError("");
+      voiceHintEl.hidden = true;
+      questionEl.focus();
+    }
+
+    askBtn.addEventListener("click", callAskApi);
+    clearBtn.addEventListener("click", clearAll);
+    questionEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); callAskApi(); }
+    });
+
+    langSwitcher.addEventListener("click", async () => {
+      if (currentLang === "en") {
+        setLangUI("hi");
+        const text = answerEl.dataset.original || answerEl.value.trim();
+        if (text) await translateAnswer(text);
+      } else {
+        setLangUI("en");
+        if (answerEl.dataset.original) {
+          setAnswer(answerEl.dataset.original);
+          delete answerEl.dataset.original;
+        }
+      }
+    });
+    langSwitcher.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); langSwitcher.click(); }
+    });
+  </script>
+</body>
+</html>

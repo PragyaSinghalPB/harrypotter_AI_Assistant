@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Help agent desk</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, sans-serif;
+      background: #0b1220;
+      color: #e8edf5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid #1e2a42;
+      background: #0f172a;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .status {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .status.connected { color: #4ade80; }
+    .status.disconnected { color: #94a3b8; }
+    .desk {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 0;
+    }
+    @media (max-width: 640px) {
+      .desk { grid-template-columns: 1fr; }
+      .sidebar { max-height: 140px; }
+    }
+    .sidebar {
+      border-right: 1px solid #1e2a42;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .sidebar h2 {
+      margin: 0;
+      padding: 0.85rem 1rem 0.5rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
+    .user-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 0.65rem 0.65rem;
+    }
+    .user-item {
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      margin-bottom: 0.25rem;
+    }
+    .user-item:hover { background: #1e293b; }
+    .user-item.active {
+      background: #1e3a5f;
+      color: #f8fafc;
+    }
+    .user-item .unread {
+      float: right;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 0.65rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+    }
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      background: #0b1220;
+    }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .empty {
+      margin: auto;
+      color: #64748b;
+      font-size: 0.9rem;
+      text-align: center;
+      max-width: 320px;
+      line-height: 1.5;
+    }
+    .msg {
+      max-width: 75%;
+      padding: 0.6rem 0.85rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    .msg.visitor { align-self: flex-start; background: #1e293b; color: #e2e8f0; }
+    .msg.agent { align-self: flex-end; background: #1d4ed8; color: #fff; }
+    .msg.system {
+      align-self: center;
+      background: transparent;
+      color: #64748b;
+      font-size: 0.75rem;
+    }
+    .composer {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.85rem 1rem;
+      border-top: 1px solid #1e2a42;
+      background: #0f172a;
+    }
+    .composer input {
+      flex: 1;
+      padding: 0.55rem 0.75rem 0.625rem;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      background: #0b1220;
+      color: #f1f5f9;
+      font-family: inherit;
+      font-size: 0.88rem;
+    }
+    .composer input:focus { outline: none; border-color: #3b82f6; }
+    .composer button {
+      padding: 0.55rem 1rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .composer button:hover { background: #1d4ed8; }
+    .composer button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .back-link {
+      margin-left: 1rem;
+      font-size: 0.78rem;
+      color: #60a5fa;
+      text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div>
+      <h1>Help agent desk</h1>
+      <a href="/" class="back-link">← Back to Help chat</a>
+    </div>
+    <span id="connStatus" class="status disconnected">Disconnected — refresh to reconnect</span>
+  </header>
+
+  <div class="desk">
+    <aside class="sidebar">
+      <h2>USERS</h2>
+      <div id="userList" class="user-list"></div>
+    </aside>
+
+    <section class="main">
+      <div id="messages" class="messages">
+        <p id="emptyState" class="empty">Select a user conversation or wait for someone to open Help chat.</p>
+      </div>
+      <div class="composer">
+        <input type="text" id="replyInput" placeholder="Type your reply…" disabled>
+        <button type="button" id="sendBtn" disabled>Send</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const userList = document.getElementById("userList");
+    const messagesEl = document.getElementById("messages");
+    const emptyState = document.getElementById("emptyState");
+    const replyInput = document.getElementById("replyInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const connStatus = document.getElementById("connStatus");
+
+    let agentId = sessionStorage.getItem("desk_agent_id");
+    let activeId = null;
+    let msgCount = 0;
+    let pollTimer = null;
+    let hbTimer = null;
+
+    function setConnected(on) {
+      connStatus.className = "status " + (on ? "connected" : "disconnected");
+      connStatus.textContent = on ? "Connected" : "Disconnected — refresh to reconnect";
+      replyInput.disabled = !on || !activeId;
+      sendBtn.disabled = !on || !activeId;
+    }
+
+    async function connect() {
+      if (!agentId) {
+        const res = await fetch("/agent/online", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Agent" }),
+        });
+        const data = await res.json();
+        if (!res.ok) return setConnected(false);
+        agentId = data.agent_id;
+        sessionStorage.setItem("desk_agent_id", agentId);
+      } else {
+        const res = await fetch("/agent/heartbeat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_id: agentId }),
+        });
+        if (!res.ok) {
+          sessionStorage.removeItem("desk_agent_id");
+          agentId = null;
+          return connect();
+        }
+      }
+      setConnected(true);
+      startTimers();
+      refreshUsers();
+    }
+
+    function startTimers() {
+      clearInterval(hbTimer);
+      clearInterval(pollTimer);
+      hbTimer = setInterval(async () => {
+        const res = await fetch("/agent/heartbeat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_id: agentId }),
+        });
+        if (!res.ok) setConnected(false);
+      }, 30000);
+      pollTimer = setInterval(() => {
+        refreshUsers();
+        if (activeId) loadChat(activeId, true);
+      }, 2000);
+    }
+
+    async function refreshUsers() {
+      if (!agentId) return;
+      const res = await fetch("/agent/queue?agent_id=" + encodeURIComponent(agentId));
+      const data = await res.json();
+      const sessions = data.sessions || [];
+      userList.innerHTML = "";
+      sessions.forEach((s) => {
+        const div = document.createElement("div");
+        div.className = "user-item" + (s.id === activeId ? " active" : "");
+        div.textContent = s.label || ("User " + s.id.slice(0, 8));
+        if (s.unread) {
+          const b = document.createElement("span");
+          b.className = "unread";
+          b.textContent = s.unread;
+          div.appendChild(b);
+        }
+        div.addEventListener("click", () => selectUser(s.id));
+        userList.appendChild(div);
+      });
+    }
+
+    function renderMessages(msgs) {
+      if (!msgs.length && msgCount === 0) return;
+      emptyState.hidden = true;
+      if (msgCount === 0) {
+        messagesEl.innerHTML = "";
+        messagesEl.appendChild(emptyState);
+        emptyState.hidden = true;
+      }
+      const fresh = msgs.slice(msgCount);
+      msgCount = msgs.length;
+      fresh.forEach((m) => {
+        const div = document.createElement("div");
+        div.className = "msg " + m.role;
+        div.textContent = m.text;
+        messagesEl.appendChild(div);
+      });
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function selectUser(id) {
+      activeId = id;
+      msgCount = 0;
+      messagesEl.innerHTML = "";
+      messagesEl.appendChild(emptyState);
+      emptyState.hidden = true;
+      replyInput.disabled = false;
+      sendBtn.disabled = false;
+      await fetch("/agent/sessions/" + id + "/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: agentId }),
+      });
+      await loadChat(id);
+      refreshUsers();
+      replyInput.focus();
+    }
+
+    async function loadChat(id, quiet) {
+      const res = await fetch("/agent/sessions/" + id);
+      const data = await res.json();
+      if (!res.ok) return;
+      if (!quiet) msgCount = 0;
+      renderMessages(data.session.messages || []);
+      await fetch("/agent/sessions/" + id + "/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: agentId }),
+      });
+    }
+
+    async function sendReply() {
+      const text = replyInput.value.trim();
+      if (!text || !activeId || !agentId) return;
+      replyInput.value = "";
+      const res = await fetch("/agent/sessions/" + activeId + "/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, role: "agent", agent_id: agentId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        msgCount = (data.session?.messages || []).length;
+        renderMessages(data.session?.messages || []);
+      }
+    }
+
+    sendBtn.addEventListener("click", sendReply);
+    replyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); sendReply(); }
+    });
+
+    connect();
+  </script>
+</body>
+</html>
