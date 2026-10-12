@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+.env
+python-notes.txt
+_test_request.ps1
+Dockerfile
+.dockerignore
