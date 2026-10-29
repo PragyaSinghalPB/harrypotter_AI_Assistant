@@ -705,7 +705,15 @@
       const rec = new SpeechRecognition();
       rec.lang = "en-US";
       rec.continuous = false;
-      rec.onstart = () => { isListening = true; micBtn.classList.add("recording"); };
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+      // Text already in the box before this listening session started.
+      let baseText = questionEl.value.trim();
+      rec.onstart = () => {
+        isListening = true;
+        micBtn.classList.add("recording");
+        baseText = questionEl.value.trim();
+      };
       rec.onend = () => { isListening = false; micBtn.classList.remove("recording"); voiceHintEl.hidden = true; };
       rec.onerror = (ev) => {
         if (ev.error !== "aborted" && ev.error !== "no-speech") {
@@ -714,8 +722,15 @@
         }
       };
       rec.onresult = (ev) => {
-        const said = ev.results[0]?.[0]?.transcript;
-        if (said) questionEl.value = (questionEl.value.trim() + " " + said).trim();
+        // The browser fires onresult repeatedly, each time with the full
+        // transcript so far (e.g. "Harry", "Harry Potter"). Rebuild the text
+        // from all results instead of appending, so words never repeat.
+        let said = "";
+        for (let i = 0; i < ev.results.length; i++) {
+          said += ev.results[i][0].transcript;
+        }
+        said = said.replace(/\s+/g, " ").trim();
+        questionEl.value = (baseText + " " + said).trim();
       };
       return rec;
     }
@@ -730,6 +745,8 @@
       if (!SpeechRecognition) return;
       if (isListening && recognition) { recognition.stop(); return; }
       showError("");
+      // Stop any earlier session so two recognizers never write at once.
+      if (recognition) { try { recognition.abort(); } catch (_) {} }
       recognition = initRecognition();
       try { recognition?.start(); } catch (_) {}
     });
