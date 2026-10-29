@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 .env
 python-notes.txt
+interview_questions/
 .vercel/

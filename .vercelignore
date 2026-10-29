@@ -2,6 +2,7 @@
 __pycache__/
 .env
 python-notes.txt
+interview_questions/
 _test_request.ps1
 Dockerfile
 .dockerignore

@@ -5,4 +5,5 @@ __pycache__/
 .vercel/
 .env
 python-notes.txt
+interview_questions/
 _test_request.ps1
