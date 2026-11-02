@@ -683,8 +683,40 @@
       }
     }
 
+    // Remembers where speech stopped so "Read aloud" can resume from there.
+    // `session` changes on every start/stop so callbacks from a cancelled
+    // run can't overwrite the saved position.
+    const tts = { text: "", offset: 0, session: 0 };
+
+    function canResume() {
+      return tts.offset > 0 && answerEl.value.trim() === tts.text;
+    }
+
     function updateSpeechButtons() {
-      stopSpeechBtn.disabled = !(window.speechSynthesis?.speaking);
+      const speaking = !!window.speechSynthesis?.speaking;
+      stopSpeechBtn.disabled = !speaking;
+      readAloudBtn.textContent = !speaking && canResume() ? "Resume" : "Read aloud";
+    }
+
+    function stopSpeech() {
+      tts.session++; // ignore events from the run being cancelled
+      window.speechSynthesis?.cancel();
+      updateSpeechButtons();
+    }
+
+    // Voices load asynchronously in Chrome/Edge; keep the list fresh.
+    let ttsVoices = [];
+    function loadVoices() { ttsVoices = window.speechSynthesis?.getVoices() || []; }
+    if (window.speechSynthesis) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    function pickVoice(langCode) {
+      const prefix = langCode.split("-")[0].toLowerCase();
+      const matches = ttsVoices.filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith(prefix));
+      // Prefer the higher-quality online voices (e.g. "Google हिन्दी", "Microsoft ... Online").
+      return matches.find((v) => /google|online|natural/i.test(v.name)) || matches[0] || null;
     }
 
     function speakText(text) {
@@ -692,11 +724,49 @@
       const t = (text || "").trim();
       if (!t) return showError("Ask a question first.");
       showError("");
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(t);
-      u.lang = "en-US";
-      u.onend = u.onerror = updateSpeechButtons;
-      window.speechSynthesis.speak(u);
+      stopSpeech();
+      const session = tts.session;
+      if (!ttsVoices.length) loadVoices();
+
+      // New answer text: start from the beginning. Same text: resume.
+      if (t !== tts.text) { tts.text = t; tts.offset = 0; }
+      const start = tts.offset < t.length ? tts.offset : 0;
+      const remaining = t.slice(start);
+
+      // Speak in Hindi when the text is in Devanagari script, otherwise English.
+      const isHindi = /[\u0900-\u097F]/.test(t);
+      const lang = isHindi ? "hi-IN" : "en-US";
+      const voice = pickVoice(lang);
+      if (isHindi && !voice) {
+        showError("No Hindi voice found on this device. Use Chrome or Edge, or install a Hindi voice in system settings.");
+      }
+
+      // Chrome stops long utterances after ~15s, so speak sentence by sentence.
+      const parts = [...remaining.matchAll(/[^.!?।]+[.!?।]*/g)];
+      if (!parts.length) parts.push(Object.assign([remaining], { index: 0 }));
+      parts.forEach((m, i) => {
+        const raw = m[0];
+        const text = raw.trim();
+        if (!text) return;
+        // Position of this sentence inside the full answer text.
+        const partStart = start + m.index + (raw.length - raw.trimStart().length);
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = lang;
+        if (voice) u.voice = voice;
+        u.onstart = () => { if (session === tts.session) tts.offset = partStart; };
+        // Word boundaries give the exact word; some voices don't send them,
+        // in which case we resume from the start of the current sentence.
+        u.onboundary = (e) => {
+          if (session === tts.session && typeof e.charIndex === "number") tts.offset = partStart + e.charIndex;
+        };
+        u.onend = () => {
+          if (session !== tts.session) return;
+          if (i === parts.length - 1) tts.offset = 0; // finished: next time start over
+          updateSpeechButtons();
+        };
+        u.onerror = updateSpeechButtons;
+        window.speechSynthesis.speak(u);
+      });
       updateSpeechButtons();
     }
 
@@ -752,7 +822,7 @@
     });
 
     readAloudBtn.addEventListener("click", () => speakText(answerEl.value));
-    stopSpeechBtn.addEventListener("click", () => { window.speechSynthesis?.cancel(); updateSpeechButtons(); });
+    stopSpeechBtn.addEventListener("click", stopSpeech);
     if (window.speechSynthesis) setInterval(updateSpeechButtons, 400);
 
     async function callAskApi() {
@@ -781,7 +851,7 @@
 
     function clearAll() {
       setLoading(false);
-      window.speechSynthesis?.cancel();
+      stopSpeech();
       if (recognition && isListening) try { recognition.abort(); } catch (_) {}
       questionEl.value = "";
       setAnswer("");
